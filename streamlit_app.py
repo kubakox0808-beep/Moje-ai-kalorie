@@ -54,7 +54,7 @@ if "current_date" not in st.session_state: st.session_state.current_date = datet
 if "profil" not in st.session_state:
     st.session_state.profil = {"waga": 80.0, "wzrost": 180, "wiek": 25, "plec": "Mężczyzna", "aktywnosc": "Niska (praca siedząca)", "cel": "Utrzymanie wagi"}
 
-# --- FUNKCJA WYSZUKIWANIA W OPEN FOOD FACTS (1:1) ---
+# --- FUNKCJA WYSZUKIWANIA W OPEN FOOD FACTS ---
 def szukaj_w_bazie_off(zapytanie):
     url = f"https://world.openfoodfacts.org/cgi/search.pl?search_terms={zapytanie}&search_simple=1&action=process&json=1&page_size=5"
     headers = {'User-Agent': 'YazioAiClone - Web - 1.0'}
@@ -197,19 +197,19 @@ with tab_dodaj:
     st.subheader("📝 Nowy wpis")
     rodzaj_posilku = st.selectbox("Wybierz kategorię posiłku:", ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"])
     
-    # Bezpieczne opcje bez emoji, aby edytor nie urywał tekstu
-    metoda = st.radio("Metoda:", ["Baza produktów", "Zdjecie posilku AI", "Opis tekstowy AI", "Recznie"], horizontal=True)
+    metoda = st.radio("Metoda:", ["Baza", "Foto AI", "Tekst AI", "Recznie"], horizontal=True)
     
     nowy_posilek = None
     if "api_key" in st.session_state and st.session_state.api_key: genai.configure(api_key=st.session_state.api_key)
     
-    if metoda == "Baza produktów":
-        szukany_tekst = st.text_input("Wpisz nazwę produktu (np. Skyr Piątnica, Ketchup Włocławek):")
+    # Ultra bezpieczne, krótkie warunki jednolinijkowe
+    if metoda == "Baza":
+        szukany_tekst = st.text_input("Wpisz nazwę produktu:")
         if szukany_tekst:
             wyniki = szukaj_w_bazie_off(szukany_tekst)
             if wyniki:
                 wybrany = st.selectbox("Znalezione produkty:", wyniki, format_func=lambda x: f"{x['nazwa']} ({x['kcal_100g']} kcal/100g)")
-                waga_g = st.number_input("Ile gramów zjadłeś? (g):", min_value=1, value=100, step=10)
+                waga_g = st.number_input("Waga (g):", min_value=1, value=100, step=10)
                 if st.button("💾 Dodaj produkt"):
                     mnoznik = waga_g / 100.0
                     nowy_posilek = {
@@ -220,9 +220,9 @@ with tab_dodaj:
                         "t": int(wybrany['t_100g'] * mnoznik)
                     }
             else:
-                st.info("Brak produktów w bazie. Użyj opcji Opis tekstowy AI.")
+                st.info("Brak produktów w bazie. Użyj opcji Tekst AI.")
 
-    elif metoda == "Zdjecie posilku AI":
+    if metoda == "Foto AI":
         if not st.session_state.get("api_key"): st.warning("⚠️ Wklej klucz API w zakładce Profil i Cele!")
         else:
             foto = st.camera_input("Zrób zdjęcie", label_visibility="collapsed")
@@ -234,7 +234,4 @@ with tab_dodaj:
                         response = model.generate_content([instr, PIL.Image.open(foto)])
                         czysty_tekst = response.text.strip()
                         czysty_tekst = czysty_tekst.replace("```json", "").replace("```", "")
-                        nowy_posilek = json.loads(czysty_tekst.strip())
-                    except: st.error("Nie udało się przeanalizować zdjęcia.")
-
-    elif metoda ==
+                        nowy_posilek
