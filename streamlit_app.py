@@ -10,11 +10,11 @@ st.set_page_config(page_title="Moje Fitatu AI", page_icon="🍏", layout="center
 st.markdown("""
     <style>
     .main { background-color: #121212; color: #FFFFFF; }
-    .stButton>button { background-color: #4CAF50; color: white; width: 100%; border-radius: 10px; hieght: 50px; font-size: 18px;}
+    .stButton>button { background-color: #4CAF50; color: white; width: 100%; border-radius: 10px; height: 50px; font-size: 18px;}
     .stProgress > div > div > div > div { background-color: #4CAF50; }
     div[data-testid="stMetricValue"] { font-size: 28px; color: #4CAF50; }
     </style>
-    """, unsafe_allow_index=True)
+    """, unsafe_allow_html=True)
 
 st.title("🍏 Moje Prywatne Fitatu AI")
 st.subheader("Zrób zdjęcie lub wpisz posiłek – AI zajmie się resztą.")
@@ -143,7 +143,6 @@ if not st.session_state.history:
     st.info("Twój dziennik jest pusty. Dodaj pierwszy posiłek powyżej!")
 else:
     for idx, item in enumerate(reversed(st.session_state.history)):
-        # Odwracamy indeksy, bo wyświetlamy od najnowszego
         real_idx = len(st.session_state.history) - 1 - idx
         
         with st.container():
