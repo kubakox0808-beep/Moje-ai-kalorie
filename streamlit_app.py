@@ -37,10 +37,10 @@ if "limit_kcal" not in st.session_state:
     st.session_state.limit_kcal = 2000
 
 # --- NAGŁÓWEK ---
-st.markdown("<h2 style='text-align: center; margin-bottom: 0;'>🍏 Moje Fitatu AI</h2>", unsafe_allow_index=False)
-st.markdown("<p style='text-align: center; color: #A1A1AA; font-size: 14px;'>Aparat lub tekst – szybko i bez klikania</p>", unsafe_allow_index=False)
+st.markdown("<h2 style='text-align: center; margin-bottom: 0;'>🍏 Moje Fitatu AI</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #A1A1AA; font-size: 14px;'>Aparat lub tekst – szybko i bez klikania</p>", unsafe_allow_html=True)
 
-# --- PANEL PODSUMOWANIA (WYGLĄD PREMIUM YAZIO) ---
+# --- PANEL PODSUMOWANIA ---
 total_kcal = sum(item["kcal"] for item in st.session_state.history)
 total_b = sum(item["bialko"] for item in st.session_state.history)
 total_w = sum(item["wegle"] for item in st.session_state.history)
@@ -70,12 +70,10 @@ tab1, tab2 = st.tabs(["📸 Zrób zdjęcie", "✍️ Wpisz / Podyktuj"])
 result = None
 
 with tab1:
-    # Jeden prosty przycisk aparatu, który na iOS od razu wywołuje kamerę smartfona
     img_file = st.camera_input("Zrób zdjęcie", label_visibility="collapsed")
     if img_file:
         if st.button("🔍 Skanuj talerz przez AI", key="btn_foto"):
             with st.spinner("AI patrzy na talerz..."):
-                # Wywołanie modelu sztucznej inteligencji
                 if "api_key" in st.session_state and st.session_state.api_key:
                     genai.configure(api_key=st.session_state.api_key)
                     model = genai.GenerativeModel('gemini-2.5-flash')
@@ -91,7 +89,7 @@ with tab1:
                     st.warning("Wklej klucz API na dole ekranu!")
 
 with tab2:
-    text_input = st.text_input("Co zjadłeś? (Użyj mikrofonu na klawiaturze)", placeholder="np. Kebab w cienkim, cola zero")
+    text_input = st.text_input("Co zjadłeś? (Użyj mikrofonu)", placeholder="np. Kebab w cienkim, cola zero")
     if text_input and st.button("🔍 Podlicz tekst", key="btn_text"):
         with st.spinner("AI liczy..."):
             if "api_key" in st.session_state and st.session_state.api_key:
@@ -132,7 +130,7 @@ else:
             st.session_state.history.pop(real_idx)
             st.rerun()
 
-# --- USTAWIENIA NA SAMYM DOLE (ABY NIE PRZESZKADZAŁY) ---
+# --- USTAWIENIA NA SAMYM DOLE ---
 st.write("---")
 with st.expander("⚙️ Konfiguracja i profil"):
     st.session_state.api_key = st.text_input("Twój klucz Gemini API:", value=st.session_state.get("api_key", ""), type="password")
