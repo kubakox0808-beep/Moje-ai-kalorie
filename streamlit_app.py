@@ -6,7 +6,7 @@ import requests
 from datetime import datetime, timedelta
 import PIL.Image
 
-# --- INTERFEJS PREMIUM MOBILNY (YAZIO AI) ---
+# --- INTERFEJS PREMIUM MOBILNY ---
 st.set_page_config(page_title="Yazio AI Clone", page_icon="🍏", layout="centered")
 
 st.markdown("""
@@ -113,10 +113,16 @@ if "posilki" not in dzisiejsze_dane: dzisiejsze_dane["posilki"] = []
 if "woda" not in dzisiejsze_dane: dzisiejsze_dane["woda"] = 0
 
 # --- PODSUMOWANIE DNIA ---
-total_kcal = sum(i.get("kcal", 0) for i in dzisiejsze_dane["posilki"])
-total_b = sum(i.get("b", 0) for i in dzisiejsze_dane["posilki"])
-total_w = sum(i.get("w", 0) for i in dzisiejsze_dane["posilki"])
-total_t = sum(i.get("t", 0) for i in dzisiejsze_dane["posilki"])
+total_kcal = 0
+total_b = 0
+total_w = 0
+total_t = 0
+
+for i in dzisiejsze_dane["posilki"]:
+    total_kcal += i.get("kcal", 0)
+    total_b += i.get("b", 0)
+    total_w += i.get("w", 0)
+    total_t += i.get("t", 0)
 
 st.progress(min(total_kcal / limit_kcal, 1.0) if limit_kcal > 0 else 0.0)
 col1, col2, col3, col4 = st.columns(4)
@@ -143,10 +149,8 @@ with tab_dziennik:
     wczoraj_str = (curr_dt - timedelta(days=1)).strftime("%Y-%m-%d")
 
     for kat in kategorie:
-        # Rozbicie na bezpieczne, krotkie linie
-        wszystkie_posilki = dzisiejsze_dane.get("posilki", [])
         w_kat = []
-        for i in wszystkie_posilki:
+        for i in dzisiejsze_dane.get("posilki", []):
             if i.get("typ") == kat:
                 w_kat.append(i)
                 
@@ -192,9 +196,45 @@ with tab_dziennik:
 with tab_dodaj:
     st.subheader("📝 Nowy wpis")
     rodzaj_posilku = st.selectbox("Wybierz kategorię posiłku:", ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"])
-    metoda = st.radio("Metoda:", ["🔍 Szukaj w bazie (1:1)", "📸 Zdjęcie posiłku (AI)", "✍️ Opis tekstowy (AI)", "✏️ Ręcznie"], horizontal=True)
+    
+    # Bezpieczne opcje bez emoji, aby edytor nie urywał tekstu
+    metoda = st.radio("Metoda:", ["Baza produktów", "Zdjecie posilku AI", "Opis tekstowy AI", "Recznie"], horizontal=True)
     
     nowy_posilek = None
     if "api_key" in st.session_state and st.session_state.api_key: genai.configure(api_key=st.session_state.api_key)
     
-    if metoda == "🔍 Szukaj w bazie (1:1
+    if metoda == "Baza produktów":
+        szukany_tekst = st.text_input("Wpisz nazwę produktu (np. Skyr Piątnica, Ketchup Włocławek):")
+        if szukany_tekst:
+            wyniki = szukaj_w_bazie_off(szukany_tekst)
+            if wyniki:
+                wybrany = st.selectbox("Znalezione produkty:", wyniki, format_func=lambda x: f"{x['nazwa']} ({x['kcal_100g']} kcal/100g)")
+                waga_g = st.number_input("Ile gramów zjadłeś? (g):", min_value=1, value=100, step=10)
+                if st.button("💾 Dodaj produkt"):
+                    mnoznik = waga_g / 100.0
+                    nowy_posilek = {
+                        "nazwa": f"{wybrany['nazwa']} ({waga_g}g)",
+                        "kcal": int(wybrany['kcal_100g'] * mnoznik),
+                        "b": int(wybrany['b_100g'] * mnoznik),
+                        "w": int(wybrany['w_100g'] * mnoznik),
+                        "t": int(wybrany['t_100g'] * mnoznik)
+                    }
+            else:
+                st.info("Brak produktów w bazie. Użyj opcji Opis tekstowy AI.")
+
+    elif metoda == "Zdjecie posilku AI":
+        if not st.session_state.get("api_key"): st.warning("⚠️ Wklej klucz API w zakładce Profil i Cele!")
+        else:
+            foto = st.camera_input("Zrób zdjęcie", label_visibility="collapsed")
+            if foto and st.button("Skanuj danie"):
+                with st.spinner("Skanowanie..."):
+                    try:
+                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        instr = "Podaj kalorie i makro posiłku jako czysty JSON: {\"nazwa\": \"nazwa\", \"kcal\": 0, \"b\": 0, \"w\": 0, \"t\": 0}"
+                        response = model.generate_content([instr, PIL.Image.open(foto)])
+                        czysty_tekst = response.text.strip()
+                        czysty_tekst = czysty_tekst.replace("```json", "").replace("```", "")
+                        nowy_posilek = json.loads(czysty_tekst.strip())
+                    except: st.error("Nie udało się przeanalizować zdjęcia.")
+
+    elif metoda ==
