@@ -4,100 +4,110 @@ import json
 from datetime import datetime
 import PIL.Image
 
-# --- KONFIGURACJA STRONY (STYL FITATU/YAZIO DARK) ---
-st.set_page_config(page_title="Moje Fitatu AI", page_icon="🍏", layout="centered")
+# --- INTERFEJS SKROJONY POD IPHONE (MOBILE-FIRST) ---
+st.set_page_config(page_title="Fitatu AI", page_icon="🍏", layout="centered")
 
+# Agresywny CSS pod ekrany smartfonów
 st.markdown("""
     <style>
-    .main { background-color: #121212; color: #FFFFFF; }
-    .stButton>button { background-color: #4CAF50; color: white; width: 100%; border-radius: 10px; height: 50px; font-size: 18px;}
-    .stProgress > div > div > div > div { background-color: #4CAF50; }
-    div[data-testid="stMetricValue"] { font-size: 28px; color: #4CAF50; }
+    /* Usunięcie marginesów dla lepszego widoku na telefonie */
+    .block-container { padding-top: 1rem; padding-bottom: 1rem; padding-left: 0.5rem; padding-right: 0.5rem; }
+    .main { background-color: #0F0F10; color: #E4E4E7; }
+    
+    /* Stylizacja wielkich przycisków mobilnych */
+    .stButton>button { 
+        background-color: #22C55E; color: white; width: 100%; border-radius: 12px; 
+        height: 55px; font-size: 16px; font-weight: bold; border: none; margin-bottom: 10px;
+    }
+    .stButton>button:active { background-color: #16A34A; }
+    
+    /* Wygląd wskaźników makro */
+    div[data-testid="stMetricValue"] { font-size: 22px !important; color: #22C55E; font-weight: bold; }
+    div[data-testid="stMetricLabel"] { font-size: 12px !important; }
+    
+    /* Dziennik posiłków na telefonie */
+    .meal-row { background-color: #18181B; padding: 10px; border-radius: 10px; margin-bottom: 8px; font-size: 14px; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🍏 Moje Prywatne Fitatu AI")
-st.subheader("Zrób zdjęcie lub wpisz posiłek – AI zajmie się resztą.")
-
-# --- DZIENNIK POSIŁKÓW W PAMIĘCI ---
+# Pamięć podręczna aplikacji
 if "history" not in st.session_state:
     st.session_state.history = []
 if "limit_kcal" not in st.session_state:
-    st.session_state.limit_kcal = 2000  # Twój domyślny limit, możesz zmienić
+    st.session_state.limit_kcal = 2000
 
-# --- LEWY PANEL - USTAWIENIA ---
-with st.sidebar:
-    st.header("⚙️ Ustawienia")
-    api_key = st.text_input("Wklej swój klucz Gemini API:", type="password")
-    st.session_state.limit_kcal = st.number_input("Twój dzienny limit kcal:", value=st.session_state.limit_kcal)
-    
-    if st.button("🗑️ Wyczyść cały dzień"):
-        st.session_state.history = []
-        st.rerun()
+# --- NAGŁÓWEK ---
+st.markdown("<h2 style='text-align: center; margin-bottom: 0;'>🍏 Moje Fitatu AI</h2>", unsafe_allow_index=False)
+st.markdown("<p style='text-align: center; color: #A1A1AA; font-size: 14px;'>Aparat lub tekst – szybko i bez klikania</p>", unsafe_allow_index=False)
 
-# --- SPRAWDZENIE KLUCZA API ---
-if not api_key:
-    st.warning("👈 Aby zacząć, wklej swój darmowy klucz API w lewym panelu!")
-    st.stop()
+# --- PANEL PODSUMOWANIA (WYGLĄD PREMIUM YAZIO) ---
+total_kcal = sum(item["kcal"] for item in st.session_state.history)
+total_b = sum(item["bialko"] for item in st.session_state.history)
+total_w = sum(item["wegle"] for item in st.session_state.history)
+total_t = sum(item["tluszcz"] for item in st.session_state.history)
 
-genai.configure(api_key=api_key)
+pozostalo_kcal = st.session_state.limit_kcal - total_kcal
+progress = min(total_kcal / st.session_state.limit_kcal, 1.0) if st.session_state.limit_kcal > 0 else 0.0
 
-# --- FUNKCJA ANALIZY AI ---
-def analyze_meal(image=None, text_prompt=None):
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    
-    system_instruction = """
-    Jesteś precyzyjnym licznikiem kalorii dostosowanym do polskich realiów kulinarnych. 
-    Przeanalizuj przesłane zdjęcie lub tekst posiłku. Oszacuj wagę i podaj kalorie oraz makroskładniki.
-    Zwróć wynik TYLKO I WYŁĄCZNIE jako czysty format JSON (bez żadnego dodatkowego tekstu, bez markdown, bez ```json):
-    {
-        "nazwa": "Nazwa dania po polsku",
-        "kcal": 0,
-        "bialko": 0,
-        "wegle": 0,
-        "tluszcz": 0
-    }
-    Jeśli na zdjęciu jest kilka rzeczy, zsumuj je w jeden posiłek. Bądź realistyczny w kwestii gramatury.
-    """
-    
-    try:
-        if image:
-            img = PIL.Image.open(image)
-            response = model.generate_content([system_instruction, img, "Oceń ten posiłek."])
-        else:
-            response = model.generate_content([system_instruction, text_prompt])
-            
-        # Oczyszczanie tekstu z ewentualnych znaczników markdown
-        raw_text = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(raw_text)
-    except Exception as e:
-        st.error(f"Błąd AI: {e}")
-        return None
+# Główny pasek postępu
+st.progress(progress)
 
-# --- DODAWANIE POSIŁKU ---
-st.write("---")
-tab1, tab2 = st.tabs(["📸 Zrób zdjęcie / Wgraj foto", "✍️ Wpisz tekst / Podyktuj"])
+# Siatka makroskładników dostosowana do szerokości iPhone'a
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Kcal", f"{total_kcal}/{st.session_state.limit_kcal}")
+col2.metric("Białko", f"{total_b}g")
+col3.metric("Węgle", f"{total_w}g")
+col4.metric("Tłuszcz", f"{total_t}g")
 
+if pozostalo_kcal >= 0:
+    st.markdown(f"<div style='background-color: #14532D; padding: 8px; border-radius: 8px; text-align: center; font-size: 13px;'>Zostało: <b>{pozostalo_kcal} kcal</b></div>", unsafe_allow_html=True)
+else:
+    st.markdown(f"<div style='background-color: #7F1D1D; padding: 8px; border-radius: 8px; text-align: center; font-size: 13px;'>Przekroczono o: <b>{abs(pozostalo_kcal)} kcal</b></div>", unsafe_allow_html=True)
+
+# --- DODAWANIE POSIŁKÓW ---
+st.write("")
+tab1, tab2 = st.tabs(["📸 Zrób zdjęcie", "✍️ Wpisz / Podyktuj"])
 result = None
 
 with tab1:
-    source = st.radio("Źródło obrazu:", ["Aparat (Telefon)", "Galeria zdjęć"], horizontal=True)
-    if source == "Aparat (Telefon)":
-        img_file = st.camera_input("Zrób zdjęcie posiłku")
-    else:
-        img_file = st.file_uploader("Wybierz zdjęcie z galerii", type=["jpg", "jpeg", "png"])
-        
-    if img_file and st.button("🔍 Analizuj zdjęcie przez AI"):
-        with st.spinner("Sztuczna inteligencja analizuje Twój talerz..."):
-            result = analyze_meal(image=img_file)
+    # Jeden prosty przycisk aparatu, który na iOS od razu wywołuje kamerę smartfona
+    img_file = st.camera_input("Zrób zdjęcie", label_visibility="collapsed")
+    if img_file:
+        if st.button("🔍 Skanuj talerz przez AI", key="btn_foto"):
+            with st.spinner("AI patrzy na talerz..."):
+                # Wywołanie modelu sztucznej inteligencji
+                if "api_key" in st.session_state and st.session_state.api_key:
+                    genai.configure(api_key=st.session_state.api_key)
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    system_instruction = "Jesteś licznikiem kalorii. Przeanalizuj foto i zwróć wyłącznie JSON: {\"nazwa\": \"nazwa posiłku po polsku\", \"kcal\": 0, \"bialko\": 0, \"wegle\": 0, \"tluszcz\": 0}"
+                    try:
+                        img = PIL.Image.open(img_file)
+                        response = model.generate_content([system_instruction, img])
+                        raw_text = response.text.replace("```json", "").replace("```", "").strip()
+                        result = json.loads(raw_text)
+                    except Exception as e:
+                        st.error("Błąd klucza API lub przetwarzania zdjęcia.")
+                else:
+                    st.warning("Wklej klucz API na dole ekranu!")
 
 with tab2:
-    text_input = st.text_area("Wpisz na luzie co zjadłeś (np. 'Zapiekanka z Żabki i puszka coli zero' albo '3 jajka sadzone na maśle')", "")
-    if text_input and st.button("🔍 Dodaj tekstowo przez AI"):
-        with st.spinner("AI podlicza posiłek..."):
-            result = analyze_meal(text_prompt=text_input)
+    text_input = st.text_input("Co zjadłeś? (Użyj mikrofonu na klawiaturze)", placeholder="np. Kebab w cienkim, cola zero")
+    if text_input and st.button("🔍 Podlicz tekst", key="btn_text"):
+        with st.spinner("AI liczy..."):
+            if "api_key" in st.session_state and st.session_state.api_key:
+                genai.configure(api_key=st.session_state.api_key)
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                system_instruction = "Jesteś licznikiem kalorii. Przeanalizuj tekst i zwróć wyłącznie JSON: {\"nazwa\": \"nazwa posiłku po polsku\", \"kcal\": 0, \"bialko\": 0, \"wegle\": 0, \"tluszcz\": 0}"
+                try:
+                    response = model.generate_content([system_instruction, text_input])
+                    raw_text = response.text.replace("```json", "").replace("```", "").strip()
+                    result = json.loads(raw_text)
+                except Exception as e:
+                    st.error("Błąd AI.")
+            else:
+                st.warning("Wklej klucz API na dole ekranu!")
 
-# Jeśli AI zwróciło wynik, dodaj do historii
+# Zapisywanie posiłku
 if result:
     st.session_state.history.append({
         "czas": datetime.now().strftime("%H:%M"),
@@ -107,48 +117,26 @@ if result:
         "wegle": int(result["wegle"]),
         "tluszcz": int(result["tluszcz"])
     })
-    st.success(f"Dodano: {result['nazwa']} (+{result['kcal']} kcal)")
     st.rerun()
 
-# --- PODSUMOWANIE DNIA (W STYLU YAZIO) ---
-st.write("---")
-st.header("📊 Podsumowanie dzisiejszego dnia")
-
-total_kcal = sum(item["kcal"] for item in st.session_state.history)
-total_b = sum(item["bialko"] for item in st.session_state.history)
-total_w = sum(item["wegle"] for item in st.session_state.history)
-total_t = sum(item["tluszcz"] for item in st.session_state.history)
-
-# Pasek postępu kalorii
-pozostalo_kcal = st.session_state.limit_kcal - total_kcal
-progress = min(total_kcal / st.session_state.limit_kcal, 1.0) if st.session_state.limit_kcal > 0 else 0.0
-st.progress(progress)
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Zjedzone Kcal", f"{total_kcal} / {st.session_state.limit_kcal}")
-col2.metric("Białko (B)", f"{total_b}g")
-col3.metric("Węgle (W)", f"{total_w}g")
-col4.metric("Tłuszcz (T)", f"{total_t}g")
-
-if pozostalo_kcal >= 0:
-    st.info(f"💡 Możesz jeszcze dzisiaj zjeść: **{pozostalo_kcal} kcal**")
-else:
-    st.error(f"⚠️ Przekroczyłeś limit o: **{abs(pozostalo_kcal)} kcal**")
-
-# --- LISTA POSIŁKÓW (HISTORIA) ---
-st.write("---")
-st.header("📝 Dzisiejszy dziennik")
-
+# --- HISTORIA DNIA ---
+st.markdown("<h4 style='margin-top: 15px; margin-bottom: 5px;'>📝 Dzisiejszy dziennik:</h4>", unsafe_allow_html=True)
 if not st.session_state.history:
-    st.info("Twój dziennik jest pusty. Dodaj pierwszy posiłek powyżej!")
+    st.markdown("<p style='color: #71717A; font-size: 13px;'>Brak wpisów. Zjedz coś!</p>", unsafe_allow_html=True)
 else:
     for idx, item in enumerate(reversed(st.session_state.history)):
         real_idx = len(st.session_state.history) - 1 - idx
-        
-        with st.container():
-            c1, c2, c3 = st.columns([1, 4, 1])
-            c1.write(f"⏱️ {item['czas']}")
-            c2.write(f"**{item['nazwa']}** — 🔥 {item['kcal']} kcal | B: {item['bialko']}g | W: {item['wegle']}g | T: {item['tluszcz']}g")
-            if c3.button("❌", key=f"del_{real_idx}"):
-                st.session_state.history.pop(real_idx)
-                st.rerun()
+        c1, c2 = st.columns([5, 1])
+        c1.markdown(f"<div class='meal-row'>⏱️ <b>{item['czas']}</b> - {item['nazwa']}<br>🔥 {item['kcal']} kcal | B: {item['bialko']}g | W: {item['wegle']}g | T: {item['tluszcz']}g</div>", unsafe_allow_html=True)
+        if c2.button("❌", key=f"del_{real_idx}"):
+            st.session_state.history.pop(real_idx)
+            st.rerun()
+
+# --- USTAWIENIA NA SAMYM DOLE (ABY NIE PRZESZKADZAŁY) ---
+st.write("---")
+with st.expander("⚙️ Konfiguracja i profil"):
+    st.session_state.api_key = st.text_input("Twój klucz Gemini API:", value=st.session_state.get("api_key", ""), type="password")
+    st.session_state.limit_kcal = st.number_input("Twój dzienny cel kcal:", value=st.session_state.limit_kcal)
+    if st.button("🗑️ Resetuj cały dzień", key="reset_all"):
+        st.session_state.history = []
+        st.rerun()
