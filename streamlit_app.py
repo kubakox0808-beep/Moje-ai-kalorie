@@ -143,4 +143,58 @@ with tab_dziennik:
     wczoraj_str = (curr_dt - timedelta(days=1)).strftime("%Y-%m-%d")
 
     for kat in kategorie:
-        w_kat = [i for i in dzisiejsze_dane["posilki"] if
+        # Rozbicie na bezpieczne, krotkie linie
+        wszystkie_posilki = dzisiejsze_dane.get("posilki", [])
+        w_kat = []
+        for i in wszystkie_posilki:
+            if i.get("typ") == kat:
+                w_kat.append(i)
+                
+        kat_kcal = sum(i.get("kcal", 0) for i in w_kat)
+        st.markdown(f"<div class='section-card'><div class='meal-title'><span>{kat}</span><span style='color: #00C853;'>{kat_kcal} kcal</span></div></div>", unsafe_allow_html=True)
+        
+        if not w_kat:
+            wczorajsze_dane = st.session_state.db.get(wczoraj_str, {})
+            wczorajsze_w_kat = []
+            if isinstance(wczorajsze_dane, dict):
+                for i in wczorajsze_dane.get("posilki", []):
+                    if i.get("typ") == kat:
+                        wczorajsze_w_kat.append(i)
+                        
+            if wczorajsze_w_kat:
+                st.markdown("<div class='sub-btn'>", unsafe_allow_html=True)
+                if st.button(f"📋 Skopiuj wczorajsze {kat.lower()}", key=f"copy_{kat}"):
+                    for item in wczorajsze_w_kat:
+                        skopiowany = item.copy()
+                        skopiowany["id"] = datetime.now().timestamp() + item.get("id", 0)
+                        st.session_state.db[st.session_state.current_date]["posilki"].append(skopiowany)
+                    zapisz_baze(st.session_state.db)
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<p style='color: #52525B; font-size: 12px; margin-left: 10px; margin-top: -5px;'>Brak posiłków</p>", unsafe_allow_html=True)
+        else:
+            for item in w_kat:
+                col_txt, col_del = st.columns([6, 1])
+                with col_txt:
+                    st.markdown(f"<div class='meal-item'><b>{item.get('nazwa', 'Wpis')}</b><br><span style='color: #A1A1AA;'>🔥 {item.get('kcal', 0)} kcal | B: {item.get('b', 0)}g | W: {item.get('w', 0)}g | T: {item.get('t', 0)}g</span></div>", unsafe_allow_html=True)
+                with col_del:
+                    if st.button("❌", key=f"del_{item.get('id', 0)}"):
+                        nowa_lista = []
+                        for i in dzisiejsze_dane["posilki"]:
+                            if i.get("id") != item.get("id"):
+                                nowa_lista.append(i)
+                        st.session_state.db[st.session_state.current_date]["posilki"] = nowa_lista
+                        zapisz_baze(st.session_state.db)
+                        st.rerun()
+
+# ==================== KATEGORIA: DODAJ POSIŁEK ====================
+with tab_dodaj:
+    st.subheader("📝 Nowy wpis")
+    rodzaj_posilku = st.selectbox("Wybierz kategorię posiłku:", ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"])
+    metoda = st.radio("Metoda:", ["🔍 Szukaj w bazie (1:1)", "📸 Zdjęcie posiłku (AI)", "✍️ Opis tekstowy (AI)", "✏️ Ręcznie"], horizontal=True)
+    
+    nowy_posilek = None
+    if "api_key" in st.session_state and st.session_state.api_key: genai.configure(api_key=st.session_state.api_key)
+    
+    if metoda == "🔍 Szukaj w bazie (1:1
