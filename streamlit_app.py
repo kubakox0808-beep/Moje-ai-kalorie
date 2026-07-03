@@ -7,10 +7,42 @@ from datetime import datetime, timedelta
 import PIL.Image
 
 st.set_page_config(
-    page_title="Yazio Clone",
+    page_title="Yazio",
     page_icon="🍏",
     layout="centered"
 )
+
+# --- BEZPIECZNY, ROZBITY STYL CSS ---
+css = ""
+css += "<style>"
+css += ".block-container { padding: 1rem 0.75rem; }"
+css += ".main { background-color: #09090B; color: #FAFAFA; }"
+css += ".stButton>button { "
+css += "background: linear-gradient(135deg, #00E676 0%, #00C853 100%); "
+css += "color: white; width: 100%; border-radius: 16px; "
+css += "height: 50px; font-size: 16px; font-weight: 700; border: none; }"
+css += "div[data-testid='stMetricValue'] { "
+css += "font-size: 22px !important; color: #00E676; font-weight: 800; }"
+css += "div[data-testid='stMetricLabel'] { "
+css += "font-size: 12px !important; color: #A1A1AA; }"
+css += "div[data-testid='stMetric'] { "
+css += "background-color: #18181B; padding: 12px; border-radius: 14px; "
+css += "border: 1px solid #27272A; text-align: center; }"
+css += ".section-card { "
+css += "background: #18181B; padding: 14px; border-radius: 16px; "
+css += "margin-top: 12px; border: 1px solid #27272A; }"
+css += ".meal-title { "
+css += "font-size: 16px; font-weight: 700; color: #FFFFFF; "
+css += "display: flex; justify-content: space-between; }"
+css += ".meal-kcal { "
+css += "background: rgba(0, 230, 118, 0.15); color: #00E676; "
+css += "padding: 2px 8px; border-radius: 12px; font-size: 12px; }"
+css += ".product-row { "
+css += "background: #121214; padding: 10px; border-radius: 12px; "
+css += "margin-top: 6px; border-left: 3px solid #00E676; }"
+css += "</style>"
+
+st.markdown(css, unsafe_allow_html=True)
 
 # --- BAZA DANYCH ---
 DB_FILE = "db.json"
@@ -78,8 +110,7 @@ def akcja_gemini(user_input, is_image=False):
     genai.configure(api_key=st.session_state.api_key)
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
-        prmt = "Zwroc tylko JSON bez markdown: "
-        prmt += '{"nazwa": "X", "kcal": 0, "b": 0, "w": 0, "t": 0}'
+        prmt = "Zwroc tylko JSON: {\"nazwa\": \"X\", \"kcal\": 0, \"b\": 0, \"w\": 0, \"t\": 0}"
         if is_image:
             img = PIL.Image.open(user_input)
             raw = model.generate_content([prmt, img]).text
@@ -95,7 +126,7 @@ def akcja_gemini(user_input, is_image=False):
         st.error("Blad AI")
         return None
 
-# --- ZAPOTRZEBOWANIE ---
+# --- OBLICZENIA KALORII ---
 p = st.session_state.profil
 bmr = (10 * p["waga"]) + (6.25 * p["wzrost"]) - (5 * p["wiek"])
 if p["plec"] == "Mężczyzna":
@@ -129,8 +160,7 @@ if st.session_state.current_date not in st.session_state.db:
     }
 dzisiejsze_dane = st.session_state.db[st.session_state.current_date]
 
-# --- NAWIGACJA ---
-st.title("🍏 Aplikacja Kcal")
+# --- NAWIGACJA DNI ---
 c_prev, c_date, c_next = st.columns([1, 4, 1])
 with c_prev:
     if st.button("◀", key="p_day"):
@@ -138,14 +168,18 @@ with c_prev:
         st.session_state.current_date = prev_str
         st.rerun()
 with c_date:
-    st.subheader(st.session_state.current_date)
+    st.markdown(
+        f"<h3 style='text-align:center;margin:0;font-size:18px;'>"
+        f"🍏 {st.session_state.current_date}</h3>",
+        unsafe_allow_html=True
+    )
 with c_next:
     if st.button("▶", key="n_day"):
         next_str = (curr_dt + timedelta(days=1)).strftime("%Y-%m-%d")
         st.session_state.current_date = next_str
         st.rerun()
 
-# --- WYLICZENIA ---
+# --- LICZNIKI ---
 tkcal, tb, tw, tt = 0, 0, 0, 0
 for i in dzisiejsze_dane.get("posilki", []):
     tkcal += i.get("kcal", 0)
@@ -153,6 +187,7 @@ for i in dzisiejsze_dane.get("posilki", []):
     tw += i.get("w", 0)
     tt += i.get("t", 0)
 
+st.write("")
 progres_val = 0.0
 if limit_kcal > 0:
     progres_val = min(tkcal / limit_kcal, 1.0)
@@ -164,49 +199,58 @@ col2.metric("Białko", f"{tb}g/{limit_b}g")
 col3.metric("Węgle", f"{tw}g/{limit_w}g")
 col4.metric("Tłuszcz", f"{tt}g/{limit_t}g")
 
+st.write("")
 t_dziennik, t_dodaj, t_profil = st.tabs([
     "📅 Dziennik", 
     "➕ Dodaj", 
     "⚙️ Profil"
 ])
 
-# --- DZIENNIK ---
+# --- ZAKŁADKA: DZIENNIK ---
 with t_dziennik:
     woda_ile = dzisiejsze_dane.get('woda', 0)
-    st.subheader(f"💧 Woda: {woda_ile} / 2500 ml")
-    if st.button("➕ Wypij 250ml", key="woda_b"):
-        st.session_state.db[st.session_date]["woda"] += 250
+    st.markdown(f"💧 Woda: {woda_ile} / 2500 ml")
+    if st.button("➕ Wypij szklankę (250ml)", key="woda_b"):
+        st.session_state.db[st.session_state.current_date]["woda"] += 250
         zapisz_baze(st.session_state.db)
         st.rerun()
     
     kat_list = ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"]
     for kat in kat_list:
-        st.write(f"### {kat}")
         w_kat = []
         for i in dzisiejsze_dane.get("posilki", []):
             if i.get("typ") == kat:
                 w_kat.append(i)
         
-        if not w_kat:
-            st.text("Brak posiłków")
+        skcal = sum(i.get("kcal", 0) for i in w_kat)
+        
+        card = ""
+        card += "<div class='section-card'><div class='meal-title'>"
+        card += f"<span>{kat}</span>"
+        card += f"<span class='meal-kcal'>{skcal} kcal</span>"
+        card += "</div></div>"
+        st.markdown(card, unsafe_allow_html=True)
         
         for item in w_kat:
             cl, cp = st.columns([5, 1])
             with cl:
-                txt_p = f"**{item.get('nazwa')}** - {item.get('kcal')} kcal "
-                txt_p += f"(B:{item.get('b')}g W:{item.get('w')}g T:{item.get('t')}g)"
-                st.write(txt_p)
+                row = ""
+                row += "<div class='product-row'>"
+                row += f"<b>{item.get('nazwa')}</b><br>"
+                row += "<span style='color:#71717A;font-size:12px;'>"
+                row += f"🔥 {item.get('kcal')} kcal | "
+                row += f"B:{item.get('b')}g W:{item.get('w')}g T:{item.get('t')}g"
+                row += "</span></div>"
+                st.markdown(row, unsafe_allow_html=True)
             with cp:
+                st.write("")
                 if st.button("❌", key=f"d_{item.get('id')}"):
-                    nowa_lista = []
-                    for i in dzisiejsze_dane["posilki"]:
-                        if i.get("id") != item.get("id"):
-                            nowa_lista.append(i)
-                    st.session_state.db[st.session_state.current_date]["posilki"] = nowa_lista
+                    nowa_l = [i for i in dzisiejsze_dane["posilki"] if i.get("id") != item.get("id")]
+                    st.session_state.db[st.session_state.current_date]["posilki"] = nowa_l
                     zapisz_baze(st.session_state.db)
                     st.rerun()
 
-# --- DODAWANIE ---
+# --- ZAKŁADKA: DODAJ ---
 with t_dodaj:
     kat_wyb = st.selectbox("Kategoria:", [
         "Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"
@@ -268,7 +312,7 @@ with t_dodaj:
         st.success("Dodano!")
         st.rerun()
 
-# --- PROFIL ---
+# --- ZAKŁADKA: PROFIL ---
 with t_profil:
     st.session_state.api_key = st.text_input(
         "Klucz Gemini:", 
