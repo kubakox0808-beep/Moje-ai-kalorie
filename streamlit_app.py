@@ -20,7 +20,7 @@ st.markdown("""
     }
     .stButton>button:active { background-color: #009624; }
     
-    /* Małe przyciski (woda, quick add) */
+    /* Małe przyciski (woda) */
     .sub-btn>div>button { height: 38px !important; background-color: #1F1F22 !important; border-radius: 10px !important; font-size: 13px !important; }
     
     /* Liczniki i estetyka kart */
@@ -53,7 +53,6 @@ def zapisz_baze(dane):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(dane, f, ensure_ascii=False, indent=4)
 
-# Inicjalizacja danych w aplikacji
 if "db" not in st.session_state:
     st.session_state.db = wczytaj_baze()
 if "current_date" not in st.session_state:
@@ -104,18 +103,14 @@ with c_next:
         st.session_state.current_date = (curr_dt + timedelta(days=1)).strftime("%Y-%m-%d")
         st.rerun()
 
-# --- BEZPIECZNA STRUKTURA DNIA (FIX DLA STARYCH DANYCH) ---
+# --- STRUKTURA DNIA ---
 if st.session_state.current_date not in st.session_state.db or not isinstance(st.session_state.db[st.session_state.current_date], dict):
     st.session_state.db[st.session_state.current_date] = {"posilki": [], "woda": 0}
     zapisz_baze(st.session_state.db)
 
 dzisiejsze_dane = st.session_state.db[st.session_state.current_date]
-
-# Podwójne upewnienie się, że klucze istnieją w słowniku
-if "posilki" not in dzisiejsze_dane:
-    dzisiejsze_dane["posilki"] = []
-if "woda" not in dzisiejsze_dane:
-    dzisiejsze_dane["woda"] = 0
+if "posilki" not in dzisiejsze_dane: dzisiejsze_dane["posilki"] = []
+if "woda" not in dzisiejsze_dane: dzisiejsze_dane["woda"] = 0
 
 # --- PODSUMOWANIE DNIA ---
 total_kcal = sum(i.get("kcal", 0) for i in dzisiejsze_dane["posilki"])
@@ -131,72 +126,90 @@ col2.metric("Białko", f"{total_b}/{limit_b}g")
 col3.metric("Węgle", f"{total_w}/{limit_w}g")
 col4.metric("Tłuszcz", f"{total_t}/{limit_t}g")
 
-# --- LICZNIK WODY I QUICK ADD ---
 st.write("")
-col_left, col_right = st.columns(2)
 
-with col_left:
-    st.markdown("<p style='font-size:13px; margin-bottom:2px; color:#A1A1AA;'>💧 Licznik Wody</p>", unsafe_allow_html=True)
-    st.markdown(f"**Wypite:** {dzisiejsze_dane.get('woda', 0)} ml / 2500 ml")
+# --- PODZIAŁ NA KATEGORIE (TABS) ---
+tab_dziennik, tab_dodaj, tab_profil = st.tabs(["📅 Dziennik", "➕ Dodaj posiłek", "⚙️ Profil i Cele"])
+
+# ==================== KATEGORIA: DZIENNIK ====================
+with tab_dziennik:
+    # Licznik wody (uproszczony)
+    st.markdown(f"💧 **Woda:** {dzisiejsze_dane.get('woda', 0)} / 2500 ml")
     st.markdown("<div class='sub-btn'>", unsafe_allow_html=True)
-    if st.button("➕ Szklanka (250ml)", key="add_water"):
+    if st.button("➕ Wypij szklankę (250ml)", key="add_water"):
         st.session_state.db[st.session_state.current_date]["woda"] += 250
         zapisz_baze(st.session_state.db)
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
+    st.write("")
 
-with col_right:
-    st.markdown("<p style='font-size:13px; margin-bottom:2px; color:#A1A1AA;'>⚡ Szybkie dodawanie (Kcal)</p>", unsafe_allow_html=True)
-    st.markdown("<div class='sub-btn'>", unsafe_allow_html=True)
-    c_q1, c_q2 = st.columns(2)
-    with c_q1:
-        if st.button("+100 kcal", key="q_100"):
-            st.session_state.db[st.session_state.current_date]["posilki"].append({"nazwa": "Szybki wpis", "kcal": 100, "b": 0, "w": 0, "t": 0, "typ": "Przekąski", "id": datetime.now().timestamp()})
-            zapisz_baze(st.session_state.db)
-            st.rerun()
-        if st.button("+10g Białka", key="q_b10"):
-            st.session_state.db[st.session_state.current_date]["posilki"].append({"nazwa": "Szybkie białko", "kcal": 40, "b": 10, "w": 0, "t": 0, "typ": "Przekąski", "id": datetime.now().timestamp()})
-            zapisz_baze(st.session_state.db)
-            st.rerun()
-    with c_q2:
-        if st.button("+300 kcal", key="q_300"):
-            st.session_state.db[st.session_state.current_date]["posilki"].append({"nazwa": "Szybki wpis", "kcal": 300, "b": 0, "w": 0, "t": 0, "typ": "Przekąski", "id": datetime.now().timestamp()})
-            zapisz_baze(st.session_state.db)
-            st.rerun()
-        if st.button("+500 kcal", key="q_500"):
-            st.session_state.db[st.session_state.current_date]["posilki"].append({"nazwa": "Szybki wpis", "kcal": 500, "b": 0, "w": 0, "t": 0, "typ": "Przekąski", "id": datetime.now().timestamp()})
-            zapisz_baze(st.session_state.db)
-            st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Wyświetlanie kategorii posiłków
+    kategorie = ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"]
+    wczoraj_str = (curr_dt - timedelta(days=1)).strftime("%Y-%m-%d")
 
-# --- DODAWANIE POSIŁKU (FOTO AI / TEKST / RĘCZNIE) ---
-st.write("")
-with st.expander("➕ DODAJ POSIŁEK / SKANUJ"):
-    rodzaj_posilku = st.selectbox("Gdzie dodać?", ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"])
-    metoda = st.radio("Metoda wprowadzenia:", ["📸 Skanuj foto przez AI", "✍️ Napisz tekstowo (AI)", "✏️ Wpisz ręcznie (Znam makro)"], horizontal=False)
+    for kat in kategorie:
+        w_kat = [i for i in dzisiejsze_dane["posilki"] if i.get("typ") == kat]
+        kat_kcal = sum(i.get("kcal", 0) for i in w_kat)
+        
+        st.markdown(f"<div class='section-card'><div class='meal-title'><span>{kat}</span><span style='color: #00C853;'>{kat_kcal} kcal</span></div></div>", unsafe_allow_html=True)
+        
+        if not w_kat:
+            wczorajsze_dane = st.session_state.db.get(wczoraj_str, {})
+            wczorajsze_w_kat = []
+            if isinstance(wczorajsze_dane, dict) and "posilki" in wczorajsze_dane:
+                wczorajsze_w_kat = [i for i in wczorajsze_dane["posilki"] if i.get("typ") == kat]
+            
+            if wczorajsze_w_kat:
+                st.markdown("<div class='sub-btn'>", unsafe_allow_html=True)
+                if st.button(f"📋 Skopiuj wczorajsze {kat.lower()}", key=f"copy_{kat}"):
+                    for item in wczorajsze_w_kat:
+                        skopiowany = item.copy()
+                        skopiowany["id"] = datetime.now().timestamp() + item.get("id", 0)
+                        st.session_state.db[st.session_state.current_date]["posilki"].append(skopiowany)
+                    zapisz_baze(st.session_state.db)
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<p style='color: #52525B; font-size: 12px; margin-left: 10px; margin-top: -5px;'>Brak posiłków</p>", unsafe_allow_html=True)
+        else:
+            for item in w_kat:
+                col_txt, col_del = st.columns([6, 1])
+                with col_txt:
+                    st.markdown(f"<div class='meal-item'><b>{item.get('nazwa', 'Wpis')}</b><br><span style='color: #A1A1AA;'>🔥 {item.get('kcal', 0)} kcal | B: {item.get('b', 0)}g | W: {item.get('w', 0)}g | T: {item.get('t', 0)}g</span></div>", unsafe_allow_html=True)
+                with col_del:
+                    if st.button("❌", key=f"del_{item.get('id', 0)}"):
+                        st.session_state.db[st.session_state.current_date]["posilki"] = [i for i in dzisiejsze_dane["posilki"] if i.get("id") != item.get("id")]
+                        zapisz_baze(st.session_state.db)
+                        st.rerun()
+
+# ==================== KATEGORIA: DODAJ POSIŁEK ====================
+with tab_dodaj:
+    st.subheader("📝 Nowy wpis")
+    rodzaj_posilku = st.selectbox("Wybierz kategorię posiłku:", ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"])
+    metoda = st.radio("Metoda:", ["📸 Zdjęcie posiłku (AI)", "✍️ Opis tekstowy (AI)", "✏️ Wpisz wartości ręcznie"], horizontal=True)
     
     nowy_posilek = None
     if "api_key" in st.session_state and st.session_state.api_key:
         genai.configure(api_key=st.session_state.api_key)
     
     if "AI" in metoda and (not st.session_state.get("api_key")):
-        st.warning("⚠️ Wklej klucz API w ustawieniach na dole!")
+        st.warning("⚠️ Wklej klucz API w zakładce 'Profil i Cele'!")
         
-    elif metoda == "📸 Skanuj foto przez AI":
+    elif metoda == "📸 Zdjęcie posiłku (AI)":
         foto = st.camera_input("Zrób zdjęcie", label_visibility="collapsed")
-        if foto and st.button("🔍 Analizuj obraz"):
-            with st.spinner("AI analizuje..."):
+        if foto and st.button("🔍 Analizuj danie"):
+            with St.spinner("Skanowanie..."):
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     instr = "Podaj kalorie i makro posiłku jako czysty JSON: {\"nazwa\": \"nazwa\", \"kcal\": 0, \"b\": 0, \"w\": 0, \"t\": 0}"
                     response = model.generate_content([instr, PIL.Image.open(foto)])
                     nowy_posilek = json.loads(response.text.replace("```json", "").replace("```", "").strip())
-                except: st.error("Błąd skanowania.")
+                except: st.error("Nie udało się przeanalizować zdjęcia.")
 
-    elif metoda == "✍️ Napisz tekstowo (AI)":
-        tekst = st.text_input("Co zjadłeś?", placeholder="np. owsianka z bananem")
-        if tekst and st.button("🔍 Oblicz przez AI"):
-            with st.spinner("AI licznik makro..."):
+    elif metoda == "✍️ Opis tekstowy (AI)":
+        tekst = st.text_input("Napisz co zjadłeś (np. 3 jajka sadzone i banan):")
+        if tekst and st.button("🔍 Przelicz na makro"):
+            with st.spinner("Liczenie..."):
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     instr = "Podaj kalorie i makro posiłku jako czysty JSON: {\"nazwa\": \"nazwa\", \"kcal\": 0, \"b\": 0, \"w\": 0, \"t\": 0}"
@@ -204,9 +217,9 @@ with st.expander("➕ DODAJ POSIŁEK / SKANUJ"):
                     nowy_posilek = json.loads(response.text.replace("```json", "").replace("```", "").strip())
                 except: st.error("Błąd AI.")
 
-    elif metoda == "✏️ Wpisz ręcznie (Znam makro)":
+    elif metoda == "✏️ Wpisz wartości ręcznie":
         with st.form("manual_form"):
-            r_nazwa = st.text_input("Nazwa produktu/posiłku:", "Wpis własny")
+            r_nazwa = st.text_input("Nazwa:", "Wpis własny")
             r_kcal = st.number_input("Kalorie (kcal):", min_value=0, value=100)
             rc_b = st.number_input("Białko (g):", min_value=0, value=0)
             rc_w = st.number_input("Węglowodany (g):", min_value=0, value=0)
@@ -219,59 +232,21 @@ with st.expander("➕ DODAJ POSIŁEK / SKANUJ"):
         nowy_posilek["id"] = datetime.now().timestamp()
         st.session_state.db[st.session_state.current_date]["posilki"].append(nowy_posilek)
         zapisz_baze(st.session_state.db)
-        st.success(f"Dodano do: {rodzaj_posilku}!")
+        st.success(f"Dodano do kategorii: {rodzaj_posilku}!")
         st.rerun()
 
-# --- DZIENNIK POTRAW ---
-st.write("")
-kategorie = ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"]
-wczoraj_str = (curr_dt - timedelta(days=1)).strftime("%Y-%m-%d")
-
-for kat in kategorie:
-    w_kat = [i for i in dzisiejsze_dane["posilki"] if i.get("typ") == kat]
-    kat_kcal = sum(i.get("kcal", 0) for i in w_kat)
-    
-    st.markdown(f"<div class='section-card'><div class='meal-title'><span>{kat}</span><span style='color: #00C853;'>{kat_kcal} kcal</span></div></div>", unsafe_allow_html=True)
-    
-    if not w_kat:
-        wczorajsze_dane = st.session_state.db.get(wczoraj_str, {})
-        wczorajsze_w_kat = []
-        if isinstance(wczorajsze_dane, dict) and "posilki" in wczorajsze_dane:
-            wczorajsze_w_kat = [i for i in wczorajsze_dane["posilki"] if i.get("typ") == kat]
-        
-        if wczorajsze_w_kat:
-            st.markdown("<div class='sub-btn'>", unsafe_allow_html=True)
-            if st.button(f"📋 Skopiuj wczorajsze {kat.lower()}", key=f"copy_{kat}"):
-                for item in wczorajsze_w_kat:
-                    skopiowany = item.copy()
-                    skopiowany["id"] = datetime.now().timestamp() + item.get("id", 0)
-                    st.session_state.db[st.session_state.current_date]["posilki"].append(skopiowany)
-                zapisz_baze(st.session_state.db)
-                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-        else:
-            st.markdown("<p style='color: #52525B; font-size: 12px; margin-left: 10px; margin-top: -5px;'>Brak posiłków</p>", unsafe_allow_html=True)
-    else:
-        for item in w_kat:
-            col_txt, col_del = st.columns([6, 1])
-            with col_txt:
-                st.markdown(f"<div class='meal-item'><b>{item.get('nazwa', 'Wpis')}</b><br><span style='color: #A1A1AA;'>🔥 {item.get('kcal', 0)} kcal | B: {item.get('b', 0)}g | W: {item.get('w', 0)}g | T: {item.get('t', 0)}g</span></div>", unsafe_allow_html=True)
-            with col_del:
-                if st.button("❌", key=f"del_{item.get('id', 0)}"):
-                    st.session_state.db[st.session_state.current_date]["posilki"] = [i for i in dzisiejsze_dane["posilki"] if i.get("id") != item.get("id")]
-                    zapisz_baze(st.session_state.db)
-                    st.rerun()
-
-# --- PANEL CONFIGU ---
-st.write("---")
-with st.expander("⚙️ Twój Profil i Ustawienia"):
+# ==================== KATEGORIA: PROFIL I USTAWIENIA ====================
+with tab_profil:
+    st.subheader("⚙️ Konfiguracja profilu")
     st.session_state.api_key = st.text_input("Klucz Gemini API:", value=st.session_state.get("api_key", ""), type="password")
-    st.subheader("📊 Twoje dane biologiczne")
+    
+    st.write("")
     st.session_state.profil["plec"] = st.radio("Płeć:", ["Mężczyzna", "Kobieta"], horizontal=True, index=0 if st.session_state.profil["plec"] == "Mężczyzna" else 1)
     st.session_state.profil["waga"] = st.number_input("Waga (kg):", value=st.session_state.profil["waga"], step=0.1)
     st.session_state.profil["wzrost"] = st.number_input("Wzrost (cm):", value=st.session_state.profil["wzrost"], step=1)
     st.session_state.profil["wiek"] = st.number_input("Wiek (lata):", value=st.session_state.profil["wiek"], step=1)
     st.session_state.profil["aktywnosc"] = st.selectbox("Poziom aktywności:", ["Niska (praca siedząca)", "Średnia (1-3 treningi/tydz)", "Wysoka (codzienne treningi)"])
     st.session_state.profil["cel"] = st.selectbox("Twój cel sylwetkowy:", ["Redukcja tkanki tłuszczowej", "Utrzymanie wagi", "Budowanie masy mięśniowej"])
-    if st.button("🔄 Zapisz profil i przelicz diete"):
+    
+    if st.button("🔄 Zapisz i przelicz zapotrzebowanie"):
         st.rerun()
