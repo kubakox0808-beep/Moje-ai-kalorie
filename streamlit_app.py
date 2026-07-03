@@ -6,23 +6,58 @@ import requests
 from datetime import datetime, timedelta
 import PIL.Image
 
-# --- INTERFEJS MOBILNY ---
+# --- INTERFEJS PREMIUM (A LA YAZIO / DIETY) ---
 st.set_page_config(page_title="Yazio AI Clone", page_icon="🍏", layout="centered")
 
+# Zaawansowane stylowanie CSS dla nowoczesnego wyglądu mobilnego
 st.markdown("""
     <style>
-    .block-container { padding-top: 0.5rem; padding-bottom: 2rem; padding-left: 0.5rem; padding-right: 0.5rem; }
-    .main { background-color: #0B0B0C; color: #F4F4F5; }
+    /* Globalne tło i czcionki */
+    .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 0.75rem; padding-right: 0.75rem; }
+    .main { background-color: #09090B; color: #FAFAFA; }
+    
+    /* Główny przycisk akcji (Zielony Yazio) */
     .stButton>button { 
-        background-color: #00C853; color: white; width: 100%; border-radius: 14px; 
-        height: 50px; font-size: 15px; font-weight: bold; border: none; margin-top: 5px;
+        background: linear-gradient(135deg, #00E676 0%, #00C853 100%); 
+        color: white; width: 100%; border-radius: 16px; 
+        height: 52px; font-size: 16px; font-weight: 700; border: none;
+        box-shadow: 0 4px 12px rgba(0, 200, 83, 0.2);
+        transition: all 0.2s ease;
     }
-    .sub-btn>div>button { height: 38px !important; background-color: #1F1F22 !important; border-radius: 10px !important; font-size: 13px !important; }
-    div[data-testid="stMetricValue"] { font-size: 20px !important; color: #00C853; font-weight: bold; }
-    div[data-testid="stMetricLabel"] { font-size: 11px !important; color: #A1A1AA; }
-    .section-card { background-color: #18181B; padding: 12px; border-radius: 14px; margin-bottom: 10px; border: 1px solid #27272A; }
-    .meal-title { font-size: 15px; font-weight: bold; color: #FFFFFF; display: flex; justify-content: space-between; }
-    .meal-item { font-size: 13px; color: #D4D4D8; padding: 6px 0; border-bottom: 1px solid #27272A; }
+    .stButton>button:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0, 200, 83, 0.3); }
+    .stButton>button:active { transform: translateY(1px); }
+    
+    /* Mniejsze przyciski pomocnicze */
+    .sub-btn div button { 
+        height: 40px !important; background-color: #1F1F23 !important; 
+        border-radius: 12px !important; font-size: 14px !important; 
+        color: #E4E4E7 !important; border: 1px solid #27272A !important;
+    }
+    
+    /* Stylizacja kafelków z makroskładnikami */
+    div[data-testid="stMetricValue"] { font-size: 22px !important; color: #00E676; font-weight: 800; letter-spacing: -0.5px; }
+    div[data-testid="stMetricLabel"] { font-size: 12px !important; color: #A1A1AA; font-weight: 500; text-transform: uppercase; }
+    div[data-testid="stMetric"] { background-color: #18181B; padding: 12px; border-radius: 14px; border: 1px solid #27272A; text-align: center; }
+    
+    /* Piękne karty posiłków */
+    .section-card { 
+        background: linear-gradient(145deg, #18181B, #121214); 
+        padding: 16px; border-radius: 18px; margin-top: 14px; margin-bottom: 4px;
+        border: 1px solid #27272A; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .meal-title { font-size: 17px; font-weight: 700; color: #FFFFFF; display: flex; justify-content: space-between; align-items: center; }
+    .meal-kcal { background-color: rgba(0, 230, 118, 0.15); color: #00E676; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+    
+    /* Pojedyncze produkty w posiłku */
+    .product-row {
+        background-color: #121214; padding: 12px; border-radius: 12px; margin-top: 8px;
+        border-left: 3px solid #00E676; display: flex; justify-content: space-between; align-items: center;
+    }
+    .product-info { font-size: 14px; color: #E4E4E7; }
+    .product-macro { font-size: 12px; color: #71717A; margin-top: 2px; }
+    
+    /* Customowy pasek postępu */
+    .stProgress > div > div > div > div { background-color: #00E676; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -46,7 +81,7 @@ if "current_date" not in st.session_state: st.session_state.current_date = datet
 if "profil" not in st.session_state:
     st.session_state.profil = {"waga": 80.0, "wzrost": 180, "wiek": 25, "plec": "Mężczyzna", "aktywnosc": "Niska (praca siedząca)", "cel": "Utrzymanie wagi"}
 
-# --- WYDZIELONE FUNKCJE (UNIKANIE WCIĘĆ) ---
+# --- FUNKCJE POMOCNICZE (BEZPIECZNE DLA EDYTOPA) ---
 def akcja_szukaj(txt):
     url = f"https://world.openfoodfacts.org/cgi/search.pl?search_terms={txt}&search_simple=1&action=process&json=1&page_size=5"
     try:
@@ -67,7 +102,7 @@ def akcja_szukaj(txt):
 
 def akcja_gemini(user_input, is_image=False):
     if not st.session_state.get("api_key"):
-        st.warning("Brak klucza API!")
+        st.warning("Wklej klucz API w zakładce Profil!")
         return None
     genai.configure(api_key=st.session_state.api_key)
     try:
@@ -78,136 +113,4 @@ def akcja_gemini(user_input, is_image=False):
             response = model.generate_content([prmt, img])
         else:
             response = model.generate_content([prmt, user_input])
-        t = response.text.strip().replace("```json", "").replace("```", "")
-        return json.loads(t.strip())
-    except:
-        st.error("Blad AI")
-        return None
-
-# --- OBLICZENIA DIETY ---
-p = st.session_state.profil
-bmr = (10 * p["waga"]) + (6.25 * p["wzrost"]) - (5 * p["wiek"]) + (5 if p["plec"] == "Mężczyzna" else -161)
-pal = {"Niska (praca siedząca)": 1.2, "Średnia (1-3 treningi/tydz)": 1.4, "Wysoka (codzienne treningi)": 1.6}.get(p["aktywnosc"], 1.2)
-cpm = bmr * pal
-if p["cel"] == "Redukcja tkanki tłuszczowej": limit_kcal = cpm - 400
-elif p["cel"] == "Budowanie masy mięśniowej": limit_kcal = cpm + 300
-else: limit_kcal = cpm
-limit_kcal = int(limit_kcal)
-limit_b = int(p["waga"] * 2.0)
-limit_w = int((limit_kcal * 0.45) / 4)
-limit_t = int((limit_kcal * 0.25) / 9)
-
-# --- INICJALIZACJA DNIA ---
-curr_dt = datetime.strptime(st.session_state.current_date, "%Y-%m-%d")
-if st.session_state.current_date not in st.session_state.db:
-    st.session_state.db[st.session_state.current_date] = {"posilki": [], "woda": 0}
-dzisiejsze_dane = st.session_state.db[st.session_state.current_date]
-
-# --- NAWIGACJA ---
-c_prev, c_date, c_next = st.columns([1, 3, 1])
-with c_prev:
-    if st.button("◀", key="prev_day"):
-        st.session_state.current_date = (curr_dt - timedelta(days=1)).strftime("%Y-%m-%d")
-        st.rerun()
-with c_date:
-    st.markdown(f"<h3 style='text-align: center; margin: 0; font-size: 18px;'>📆 {st.session_state.current_date}</h3>", unsafe_allow_html=True)
-with c_next:
-    if st.button("▶", key="next_day"):
-        st.session_state.current_date = (curr_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-        st.rerun()
-
-# --- SUMY ---
-total_kcal = 0
-total_b = 0
-total_w = 0
-total_t = 0
-for i in dzisiejsze_dane.get("posilki", []):
-    total_kcal += i.get("kcal", 0)
-    total_b += i.get("b", 0)
-    total_w += i.get("w", 0)
-    total_t += i.get("t", 0)
-
-st.progress(min(total_kcal / limit_kcal, 1.0) if limit_kcal > 0 else 0.0)
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Kcal", f"{total_kcal}/{limit_kcal}")
-col2.metric("Białko", f"{total_b}/{limit_b}g")
-col3.metric("Węgle", f"{total_w}/{limit_w}g")
-col4.metric("Tłuszcz", f"{total_t}/{limit_t}g")
-
-tab_dziennik, tab_dodaj, tab_profil = st.tabs(["📅 Dziennik", "➕ Dodaj", "⚙️ Profil"])
-
-# --- WIDOK: DZIENNIK ---
-with tab_dziennik:
-    st.markdown(f"💧 Woda: {dzisiejsze_dane.get('woda', 0)} / 2500 ml")
-    if st.button("➕ Szklanka (250ml)", key="add_w"):
-        st.session_state.db[st.session_state.current_date]["woda"] += 250
-        zapisz_baze(st.session_state.db)
-        st.rerun()
-    
-    for kat in ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"]:
-        w_kat = [i for i in dzisiejsze_dane.get("posilki", []) if i.get("typ") == kat]
-        skcal = sum(i.get("kcal", 0) for i in w_kat)
-        st.markdown(f"<div class='section-card'><div class='meal-title'><span>{kat}</span><span>{skcal} kcal</span></div></div>", unsafe_allow_html=True)
-        for item in w_kat:
-            cx, cd = st.columns([6, 1])
-            cx.markdown(f"**{item.get('nazwa')}**<br>{item.get('kcal')} kcal | B:{item.get('b')}g", unsafe_allow_html=True)
-            if cd.button("❌", key=f"del_{item.get('id')}"):
-                st.session_state.db[st.session_state.current_date]["posilki"] = [i for i in dzisiejsze_dane["posilki"] if i.get("id") != item.get("id")]
-                zapisz_baze(st.session_state.db)
-                st.rerun()
-
-# --- WIDOK: DODAJ ---
-with tab_dodaj:
-    kat_wyb = st.selectbox("Kategoria:", ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"])
-    metoda = st.radio("Metoda:", ["Baza", "Foto", "Tekst", "Recznie"], horizontal=True)
-    res_posilek = None
-
-    if metoda == "Baza":
-        stxt = st.text_input("Nazwa produktu:")
-        if stxt:
-            w = akcja_szukaj(stxt)
-            if w:
-                wyb = st.selectbox("Wyniki:", w, format_func=lambda x: f"{x['nazwa']} ({x['kcal_100g']} kcal)")
-                g = st.number_input("Gramy:", min_value=1, value=100)
-                if st.button("Zapisz produkt"):
-                    m = g / 100.0
-                    res_posilek = {"nazwa": f"{wyb['nazwa']} ({g}g)", "kcal": int(wyb['kcal_100g'] * m), "b": int(wyb['b_100g'] * m), "w": int(wyb['w_100g'] * m), "t": int(wyb['t_100g'] * m)}
-
-    if metoda == "Foto":
-        f = st.camera_input("Zdjecie:")
-        if f and st.button("Skanuj AI"):
-            res_posilek = akcja_gemini(f, is_image=True)
-
-    if metoda == "Tekst":
-        t = st.text_input("Co zjadles?:")
-        if t and st.button("Licz AI"):
-            res_posilek = akcja_gemini(t, is_image=False)
-
-    if metoda == "Recznie":
-        with st.form("f_man"):
-            rn = st.text_input("Nazwa:", "Wpis")
-            rk = st.number_input("Kcal:", value=100)
-            rb = st.number_input("Białko:", value=0)
-            rw = st.number_input("Węgle:", value=0)
-            rt = st.number_input("Tłuszcz:", value=0)
-            if st.form_submit_button("Dodaj recznie"):
-                res_posilek = {"nazwa": rn, "kcal": int(rk), "b": int(rb), "w": int(rw), "t": int(rt)}
-
-    if res_posilek:
-        res_posilek["typ"] = kat_wyb
-        res_posilek["id"] = datetime.now().timestamp()
-        st.session_state.db[st.session_state.current_date]["posilki"].append(res_posilek)
-        zapisz_baze(st.session_state.db)
-        st.success("Dodano!")
-        st.rerun()
-
-# --- WIDOK: PROFIL ---
-with tab_profil:
-    st.session_state.api_key = st.text_input("Gemini API Key:", value=st.session_state.get("api_key", ""), type="password")
-    st.session_state.profil["plec"] = st.radio("Płeć:", ["Mężczyzna", "Kobieta"], horizontal=True)
-    st.session_state.profil["waga"] = st.number_input("Waga (kg):", value=st.session_state.profil["waga"])
-    st.session_state.profil["wzrost"] = st.number_input("Wzrost (cm):", value=st.session_state.profil["wzrost"])
-    st.session_state.profil["wiek"] = st.number_input("Wiek:", value=st.session_state.profil["wiek"])
-    st.session_state.profil["aktywnosc"] = st.selectbox("Aktywność:", ["Niska (praca siedząca)", "Średnia (1-3 treningi/tydz)", "Wysoka (codzienne treningi)"])
-    st.session_state.profil["cel"] = st.selectbox("Cel:", ["Redukcja tkanki tłuszczowej", "Utrzymanie wagi", "Budowanie masy mięśniowej"])
-    if st.button("Zapisz profil"): st.rerun()
+        t = response.text.strip().replace("```json", "").replace("
