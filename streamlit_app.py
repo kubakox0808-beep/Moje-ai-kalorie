@@ -41,7 +41,10 @@ def wczytaj_baze():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                dane = json.load(f)
+                if isinstance(dane, dict):
+                    return dane
+                return {}
         except:
             return {}
     return {}
@@ -101,18 +104,24 @@ with c_next:
         st.session_state.current_date = (curr_dt + timedelta(days=1)).strftime("%Y-%m-%d")
         st.rerun()
 
-# Przygotuj strukturę na wybrany dzień
-if st.session_state.current_date not in st.session_state.db:
+# --- BEZPIECZNA STRUKTURA DNIA (FIX DLA STARYCH DANYCH) ---
+if st.session_state.current_date not in st.session_state.db or not isinstance(st.session_state.db[st.session_state.current_date], dict):
     st.session_state.db[st.session_state.current_date] = {"posilki": [], "woda": 0}
     zapisz_baze(st.session_state.db)
 
 dzisiejsze_dane = st.session_state.db[st.session_state.current_date]
 
+# Podwójne upewnienie się, że klucze istnieją w słowniku
+if "posilki" not in dzisiejsze_dane:
+    dzisiejsze_dane["posilki"] = []
+if "woda" not in dzisiejsze_dane:
+    dzisiejsze_dane["woda"] = 0
+
 # --- PODSUMOWANIE DNIA ---
-total_kcal = sum(i["kcal"] for i in dzisiejsze_dane.get("posilki", []))
-total_b = sum(i["b"] for i in dzisiejsze_dane.get("posilki", []))
-total_w = sum(i["w"] for i in dzisiejsze_dane.get("posilki", []))
-total_t = sum(i["t"] for i in dzisiejsze_dane.get("posilki", []))
+total_kcal = sum(i.get("kcal", 0) for i in dzisiejsze_dane["posilki"])
+total_b = sum(i.get("b", 0) for i in dzisiejsze_dane["posilki"])
+total_w = sum(i.get("w", 0) for i in dzisiejsze_dane["posilki"])
+total_t = sum(i.get("t", 0) for i in dzisiejsze_dane["posilki"])
 
 st.progress(min(total_kcal / limit_kcal, 1.0) if limit_kcal > 0 else 0.0)
 
@@ -187,7 +196,7 @@ with st.expander("➕ DODAJ POSIŁEK / SKANUJ"):
     elif metoda == "✍️ Napisz tekstowo (AI)":
         tekst = st.text_input("Co zjadłeś?", placeholder="np. owsianka z bananem")
         if tekst and st.button("🔍 Oblicz przez AI"):
-            with st.spinner("AI liczy makro..."):
+            with st.spinner("AI licznik makro..."):
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     instr = "Podaj kalorie i makro posiłku jako czysty JSON: {\"nazwa\": \"nazwa\", \"kcal\": 0, \"b\": 0, \"w\": 0, \"t\": 0}"
@@ -219,21 +228,23 @@ kategorie = ["Śniadanie", "Drugie śniadanie", "Obiad", "Kolacja", "Przekąski"
 wczoraj_str = (curr_dt - timedelta(days=1)).strftime("%Y-%m-%d")
 
 for kat in kategorie:
-    w_kat = [i for i in dzisiejsze_dane.get("posilki", []) if i["typ"] == kat]
-    kat_kcal = sum(i["kcal"] for i in w_kat)
+    w_kat = [i for i in dzisiejsze_dane["posilki"] if i.get("typ") == kat]
+    kat_kcal = sum(i.get("kcal", 0) for i in w_kat)
     
     st.markdown(f"<div class='section-card'><div class='meal-title'><span>{kat}</span><span style='color: #00C853;'>{kat_kcal} kcal</span></div></div>", unsafe_allow_html=True)
     
     if not w_kat:
-        wczorajsze_w_kat = st.session_state.db.get(wczoraj_str, {}).get("posilki", [])
-        wczorajsze_w_kat = [i for i in wczorajsze_w_kat if i["typ"] == kat]
+        wczorajsze_dane = st.session_state.db.get(wczoraj_str, {})
+        wczorajsze_w_kat = []
+        if isinstance(wczorajsze_dane, dict) and "posilki" in wczorajsze_dane:
+            wczorajsze_w_kat = [i for i in wczorajsze_dane["posilki"] if i.get("typ") == kat]
         
         if wczorajsze_w_kat:
             st.markdown("<div class='sub-btn'>", unsafe_allow_html=True)
             if st.button(f"📋 Skopiuj wczorajsze {kat.lower()}", key=f"copy_{kat}"):
                 for item in wczorajsze_w_kat:
                     skopiowany = item.copy()
-                    skopiowany["id"] = datetime.now().timestamp() + item["id"]
+                    skopiowany["id"] = datetime.now().timestamp() + item.get("id", 0)
                     st.session_state.db[st.session_state.current_date]["posilki"].append(skopiowany)
                 zapisz_baze(st.session_state.db)
                 st.rerun()
@@ -244,10 +255,10 @@ for kat in kategorie:
         for item in w_kat:
             col_txt, col_del = st.columns([6, 1])
             with col_txt:
-                st.markdown(f"<div class='meal-item'><b>{item['nazwa']}</b><br><span style='color: #A1A1AA;'>🔥 {item['kcal']} kcal | B: {item['b']}g | W: {item['w']}g | T: {item['t']}g</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='meal-item'><b>{item.get('nazwa', 'Wpis')}</b><br><span style='color: #A1A1AA;'>🔥 {item.get('kcal', 0)} kcal | B: {item.get('b', 0)}g | W: {item.get('w', 0)}g | T: {item.get('t', 0)}g</span></div>", unsafe_allow_html=True)
             with col_del:
-                if st.button("❌", key=f"del_{item['id']}"):
-                    st.session_state.db[st.session_state.current_date]["posilki"] = [i for i in dzisiejsze_dane["posilki"] if i["id"] != item["id"]]
+                if st.button("❌", key=f"del_{item.get('id', 0)}"):
+                    st.session_state.db[st.session_state.current_date]["posilki"] = [i for i in dzisiejsze_dane["posilki"] if i.get("id") != item.get("id")]
                     zapisz_baze(st.session_state.db)
                     st.rerun()
 
